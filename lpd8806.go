@@ -1,11 +1,10 @@
-package main
+package lpd8806
 
 import (
 	"errors"
 	"time"
 
 	"github.com/inux/hwspi"
-	"github.com/kidoman/embd"
 	_ "github.com/kidoman/embd/host/rpi" // This loads the RPi driver
 )
 
@@ -19,31 +18,57 @@ type LPD8806 struct {
 	spiCon      *hwspi.HWspi
 }
 
-func (lpd *LPD8806) allToColor(r, g, b byte) {
+//AllToColor - all LEDs of the strip to a specific color
+func (lpd *LPD8806) AllToColor(r, g, b byte) {
 	var i uint
 	for i = 0; i < lpd.colorsCount; i = i + 3 {
 		lpd.ColorArray[i] = (g | 0x80)
-		lpd.ColorArray[i+1] = (b | 0x80)
-		lpd.ColorArray[i+2] = (r | 0x80)
+		lpd.ColorArray[i+1] = (r | 0x80)
+		lpd.ColorArray[i+2] = (b | 0x80)
 	}
 	lpd.writeExp()
 }
 
-func (lpd *LPD8806) singleToColor(b byte) {
+//SingleToColor - single LED of the strip to a specific color
+func (lpd *LPD8806) SingleToColor(b byte) {
 
 }
 
-func (lpd *LPD8806) segmentToColor(b byte) {
+//SegmentToColor - segment of the strip to specific color
+func (lpd *LPD8806) SegmentToColor(b byte) {
 
 }
 
-func (lpd *LPD8806) allToColorByArray(b byte) {
+//AllToColorByArray - array will get applied on strip (r,g,b for each LED)
+func (lpd *LPD8806) AllToColorByArray(b byte) {
 
 }
 
-func (lpd *LPD8806) allOff() {
+//AllOff - switch off the strip (r,g,b to 0)
+func (lpd *LPD8806) AllOff() {
 	lpd.initColorArray()
 	lpd.writeExp()
+}
+
+//Init Creates a New LPD8806 driver
+func (lpd *LPD8806) Init(ClkPin string, ClkFactor time.Duration,
+	DataPin string, LedCount uint) (*LPD8806, error) {
+	if LedCount > 0 {
+		lpd.LedCount = LedCount
+		lpd.colorsCount = LedCount * 3
+		lpd.latchCount = (LedCount + 31) / 32
+
+		lpd.initColorArray()
+
+		lpd.spiCon = &hwspi.HWspi{}
+		lpd.spiCon.Init(ClkPin, DataPin, ClkFactor)
+		//first led commands
+		lpd.latch()
+		lpd.AllOff()
+
+		return lpd, nil
+	}
+	return nil, errors.New("LPD8806: Invalid parameters - cannot create LPD8806")
 }
 
 func (lpd *LPD8806) writeExp() {
@@ -74,35 +99,8 @@ func (lpd *LPD8806) initColorArray() {
 	}
 }
 
-//Init Creates a New LPD8806 driver
-func (lpd *LPD8806) Init(ClkPin, DataPin string, LedCount uint) (*LPD8806, error) {
-	if LedCount > 0 {
-		lpd.LedCount = LedCount
-		lpd.colorsCount = LedCount * 3
-		lpd.latchCount = (LedCount + 31) / 32
-
-		lpd.initColorArray()
-
-		lpd.spiCon = &hwspi.HWspi{}
-		lpd.spiCon.Init(ClkPin, DataPin, 1)
-
-		//first led commands
-		lpd.latch()
-		lpd.allOff()
-		lpd.allToColor(255, 255, 255)
-
-		return lpd, nil
-	}
-	return nil, errors.New("LPD8806: Invalid parameters - cannot create LPD8806")
-}
-
-const (
-	clkPin  string = "SPI0_SCLK"
-	dataPin string = "SPI0_MOSI"
-)
-
 func reverseByte(b byte) byte {
-	r := b
+	var r = b
 	b >>= 1
 
 	for i := 0; i < 8; i++ {
@@ -112,30 +110,4 @@ func reverseByte(b byte) byte {
 	}
 
 	return r
-}
-
-func main() {
-	var lpd8806 = &LPD8806{}
-	lpd8806.Init(clkPin, dataPin, 2)
-	//has to be used in main thread!
-	defer embd.CloseGPIO()
-
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0xFF, 0xFF, 0xFF)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0x00, 0x00, 0xFF)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0x00, 0xFF, 0x00)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0x00, 0xFF, 0xFF)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0xFF, 0x00, 0x00)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0xFF, 0x00, 0xFF)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0xFF, 0xFF, 0x00)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0xFF, 0xFF, 0xFF)
-	time.Sleep(time.Second * 2)
-	lpd8806.allToColor(0x00, 0x00, 0x00)
 }
